@@ -1,0 +1,147 @@
+// web/prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String   @id @default(cuid())
+  name           String?
+  email          String?  @unique
+  emailVerified  DateTime?
+  image          String?
+  accounts       Account[]
+  sessions       Session[]
+  repos          Repo[]
+  audits         AuditEvent[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Repo {
+  id           String     @id @default(cuid())
+  owner        String
+  name         String
+  fullName     String     @unique
+  defaultBranch String?
+  installedAt  DateTime   @default(now())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scanJobs     ScanJob[]
+  findings     Finding[]
+  sboms        Sbom[]
+}
+
+model ScanJob {
+  id          String    @id @default(cuid())
+  repoId      String
+  repo        Repo      @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  kind        ScanKind
+  status      JobStatus @default(PENDING)
+  commitSha   String?
+  queuedAt    DateTime  @default(now())
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  error       String?
+  findings    Finding[]
+}
+
+model Finding {
+  id          String    @id @default(cuid())
+  repoId      String
+  repo        Repo      @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  jobId       String?
+  job         ScanJob?  @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  kind        FindingKind
+  ruleId      String?
+  title       String
+  description String?
+  severity    Severity  @default(INFO)
+  path        String?
+  link        String?
+  createdAt   DateTime  @default(now())
+}
+
+model Sbom {
+  id        String   @id @default(cuid())
+  repoId    String
+  repo      Repo     @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  format    String   // e.g., cyclonedx-json
+  storageKey String  // R2/S3 anahtarı (ileride)
+  createdAt DateTime @default(now())
+}
+
+model AuditEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String   // e.g., "SCAN_TRIGGERED", "ISSUE_OPENED"
+  meta      Json?
+  createdAt DateTime @default(now())
+}
+
+enum ScanKind {
+  SECRETS
+  VULNS
+  SBOM
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+enum FindingKind {
+  SECRET
+  VULN
+}
+
+enum Severity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
