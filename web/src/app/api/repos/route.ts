@@ -1,48 +1,55 @@
-import { NextResponse } from "next/server";
-import { z } from "zod";
-import { prisma } from "@/lib/db";
+﻿import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 
-const Body = z.object({
-    id: z.number(), // GitHub numeric id
-    full_name: z.string(),
-    private: z.boolean(),
-    default_branch: z.string().optional(),
-    html_url: z.string().url().optional(),
-});
+type RepoLite = {
+  id: number;
+  full_name: string;
+  private: boolean;
+  default_branch: string;
+  html_url: string;
+};
 
-export async function POST(req: Request) {
+export async function GET() {
+  try {
     const session = await auth();
-    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const json = await req.json();
-    const data = Body.parse(json);
+    const token =
+      (session as any)?.accessToken ||
+      process.env.GITHUB_TOKEN ||
+      "";
 
-    const saved = await prisma.repo.upsert({
-        where: {
-            userId_githubId: {
-                userId: session.user.id,
-                githubId: BigInt(data.id),
-            },
-        },
-        update: {
-            fullName: data.full_name,
-            private: data.private,
-            defaultBranch: data.default_branch,
-            htmlUrl: data.html_url,
-        },
-        create: {
-            userId: session.user.id,
-            githubId: BigInt(data.id),
-            fullName: data.full_name,
-            private: data.private,
-            defaultBranch: data.default_branch,
-            htmlUrl: data.html_url,
-        },
-        select: { id: true, fullName: true },
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const res = await fetch("https://api.github.com/user/repos?per_page=100&sort=updated&direction=desc", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "repoguardian",
+      },
+      cache: "no-store",
     });
 
-    return NextResponse.json(saved, { status: 201 });
+    if (!res.ok) {
+      const txt = await res.text();
+      console.error("/api/repos github error", res.status, txt);
+      return NextResponse.json({ error: "GitHub error" }, { status: 502 });
+    }
+
+    const data = await res.json() as any[];
+    const repos: RepoLite[] = data.map((r) => ({
+      id: r.id,
+      full_name: r.full_name,
+      private: !!r.private,
+      default_branch: r.default_branch ?? "main",
+      html_url: r.html_url,
+    }));
+
+    return NextResponse.json({ repos }, { headers: { "Cache-Control": "no-store" } });
+  } catch (err) {
+    console.error("/api/repos failed", err);
+    return NextResponse.json({ error: "Failed to load repositories" }, { status: 500 });
+  }
 }
-
-

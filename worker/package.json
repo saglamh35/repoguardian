@@ -6,10 +6,19 @@
         "dev": "tsx watch src/index.ts"
     },
     "dependencies": {
+        "@octokit/rest": "^22.0.0",
+        "@prisma/client": "^6.14.0",
         "bullmq": "^5.58.0",
         "dotenv": "^16.4.5",
+        "execa": "^9.6.0",
+        "fs-extra": "^11.3.1",
         "ioredis": "^5.3.2",
+        "tmp": "^0.2.5",
         "tsx": "^4.19.0",
-        "zod": "^3.23.8"
+        "zod": "^3.25.76"
+    },
+    "devDependencies": {
+        "@types/node": "^24.3.0",
+        "prisma": "^6.14.0"
     }
 }

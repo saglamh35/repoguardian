@@ -1,13 +1,15 @@
 ﻿// web/src/app/api/jobs/route.ts
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
-import { enqueueJob } from "@/lib/queue";
-import { prisma } from "@/lib/db";
+import { auth } from "@lib/auth";
+import { enqueueJob } from "@lib/queue";
+import { prisma } from "@lib/db";
+
+export const dynamic = "force-dynamic";
 
 const Body = z.object({
   type: z.enum(["ping", "scan:secrets", "scan:sbom", "scan:vulns"]),
-  repoGithubId: z.number().optional(),
+  repoGithubId: z.coerce.number().optional(), // form-body için coerce
 });
 
 export async function POST(req: Request) {
@@ -15,7 +17,24 @@ export async function POST(req: Request) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const body = Body.parse(await req.json());
+
+  // Hem JSON hem form-data destekle
+  let raw: any = {};
+  const ct = req.headers.get("content-type") || "";
+  try {
+    if (ct.includes("application/json")) {
+      raw = await req.json();
+    } else if (ct.includes("application/x-www-form-urlencoded") || ct.includes("multipart/form-data")) {
+      const form = await req.formData();
+      raw = Object.fromEntries(form.entries());
+    } else {
+      raw = await req.json().catch(() => ({}));
+    }
+  } catch {
+    raw = {};
+  }
+
+  const body = Body.parse(raw);
 
   let repoId: string | null = null;
 
@@ -24,6 +43,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "repoGithubId required" }, { status: 400 });
     }
 
+    // 1) DB'de var mı?
     const existing = await prisma.repo.findFirst({
       where: { userId: session.user.id, githubId: BigInt(body.repoGithubId) },
       select: { id: true },
@@ -32,10 +52,12 @@ export async function POST(req: Request) {
     if (existing) {
       repoId = existing.id;
     } else {
+      // 2) Yoksa GitHub'tan çekip DB'ye yaz (private için token şart)
       const token =
         (session as any).accessToken ||
         (session as any).user?.accessToken ||
         (session as any).githubAccessToken ||
+        process.env.GITHUB_TOKEN ||
         undefined;
 
       if (!token) {

@@ -1,22 +1,20 @@
-import "dotenv/config";
-import { PrismaClient } from "@prisma/client";
+// worker/src/prisma.ts
+import 'dotenv/config';
+import * as path from 'node:path';
+import * as fs from 'node:fs';
+import * as dotenv from 'dotenv';
+import { PrismaClient } from '@prisma/client';
 
-const hasEnv = !!process.env.DATABASE_URL;
-if (!hasEnv) {
-    // Son bir defa fallback verelim (lokal)
-    process.env.DATABASE_URL =
-        process.env.DATABASE_URL ??
-        "postgresql://repoguard:repoguard@localhost:5432/repoguard?schema=public";
-    console.warn("[worker] DATABASE_URL env’i bulunamadı, lokal fallback kullanılıyor.");
+// .env (worker) -> yoksa web/.env dene
+if (!process.env.DATABASE_URL) {
+    const workerEnv = path.resolve(process.cwd(), '.env');
+    const webEnv = path.resolve(process.cwd(), '..', 'web', '.env');
+    if (fs.existsSync(workerEnv)) dotenv.config({ path: workerEnv });
+    if (!process.env.DATABASE_URL && fs.existsSync(webEnv)) dotenv.config({ path: webEnv });
 }
 
-export const prisma =
-    // @ts-ignore
-    globalThis.__prisma ??
-    new PrismaClient({
-        log: ["warn", "error"],
-        datasources: { db: { url: process.env.DATABASE_URL! } },
-    });
+if (!process.env.DATABASE_URL) {
+    console.error('[worker] DATABASE_URL hâlâ yok. worker/.env içine ekleyin.');
+}
 
-// @ts-ignore
-if (!globalThis.__prisma) globalThis.__prisma = prisma;
+export const prisma = new PrismaClient();
