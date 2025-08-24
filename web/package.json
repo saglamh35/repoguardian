@@ -9,10 +9,16 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@auth/prisma-adapter": "^2.10.0",
+    "@octokit/rest": "^22.0.0",
     "@prisma/client": "^6.14.0",
+    "bullmq": "^5.58.0",
+    "ioredis": "^5.7.0",
     "next": "15.4.6",
+    "next-auth": "5.0.0-beta.29",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "zod": "^4.0.17"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

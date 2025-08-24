@@ -59,17 +59,23 @@ model VerificationToken {
 }
 
 model Repo {
-  id           String     @id @default(cuid())
-  owner        String
-  name         String
-  fullName     String     @unique
+  id            String     @id @default(cuid())
+  githubId      BigInt
+  fullName      String     // e.g. "owner/name"
+  private       Boolean
   defaultBranch String?
-  installedAt  DateTime   @default(now())
-  userId       String
-  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  scanJobs     ScanJob[]
-  findings     Finding[]
-  sboms        Sbom[]
+  htmlUrl       String?
+  userId        String
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scanJobs      ScanJob[]
+  findings      Finding[]
+  sboms         Sbom[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, githubId])
+  @@unique([fullName])
 }
 
 model ScanJob {
