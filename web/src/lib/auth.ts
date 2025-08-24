@@ -1,20 +1,30 @@
-﻿import NextAuth, { type NextAuthConfig } from "next-auth";
+﻿import NextAuth from "next-auth";
 import GitHub from "next-auth/providers/github";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/db";
 
-export const authConfig = {
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  adapter: PrismaAdapter(prisma),
+  session: { strategy: "jwt" },
   providers: [
     GitHub({
-      clientId: process.env.AUTH_GITHUB_ID ?? process.env.GITHUB_ID!,
-      clientSecret: process.env.AUTH_GITHUB_SECRET ?? process.env.GITHUB_SECRET!,
-      authorization: { params: { scope: "read:user repo" } },
-      allowDangerousEmailAccountLinking: true,
+      clientId: process.env.GITHUB_CLIENT_ID!,
+      clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+      // Özel repo erişimi için "repo" şart
+      authorization: { params: { scope: "read:user user:email repo" } },
     }),
   ],
-  adapter: PrismaAdapter(prisma),
-  session: { strategy: "database" },
-  trustHost: true,
-} satisfies NextAuthConfig;
-
-export const { handlers, auth, signIn, signOut } = NextAuth(authConfig);
+  callbacks: {
+    async jwt({ token, account, user }) {
+      if (account?.access_token) (token as any).accessToken = account.access_token;
+      if (user?.id) (token as any).uid = user.id; // DB user id
+      return token;
+    },
+    async session({ session, token, user }) {
+      (session as any).accessToken = (token as any).accessToken ?? null;
+      if (!session.user) (session as any).user = {};
+      (session.user as any).id = user?.id ?? (token as any).uid ?? null;
+      return session;
+    },
+  },
+});

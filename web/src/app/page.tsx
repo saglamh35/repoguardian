@@ -1,10 +1,16 @@
 ﻿import { auth } from "@/lib/auth"
 
+// src/app/page.tsx
 async function getHealth() {
-  const res = await fetch('http://localhost:3000/api/health', { cache: 'no-store' });
-  if (!res.ok) throw new Error('Health check failed');
-  return res.json();
+  try {
+    const res = await fetch('http://localhost:3000/api/health', { cache: 'no-store' })
+    if (!res.ok) return { ok: false }
+    return res.json()
+  } catch {
+    return { ok: false }
+  }
 }
+
 
 export default async function Home() {
   const session = await auth();

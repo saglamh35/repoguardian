@@ -1,67 +1,91 @@
-"use client";
+﻿"use client";
 import { useState } from "react";
 
-type Repo = {
-    id: number; // GitHub numeric id
-    full_name: string;
-    private: boolean;
-    default_branch?: string;
-    html_url?: string;
+type AnyRepo = any;
+
+type UiRepo = {
+  id: number;
+  fullName: string;
+  private: boolean;
+  defaultBranch: string;
 };
 
-export default function RepoList({ initialRepos }: { initialRepos: Repo[] }) {
-    const [repos] = useState(initialRepos);
-    const [busy, setBusy] = useState<string | null>(null);
-
-    async function queue(type: 'ping' | 'scan:secrets' | 'scan:sbom' | 'scan:vulns', r?: Repo) {
-        const key = `${type}:${r?.id ?? 'na'}`;
-        setBusy(key);
-        const res = await fetch('/api/jobs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                type,
-                repoGithubId: r?.id, // ping'te undefined kalır
-            }),
-        });
-        setBusy(null);
-        if (res.ok) {
-            const j = await res.json();
-            alert(`Queued ${type}: job ${j.id}`);
-        } else {
-            const t = await res.text().catch(() => '');
-            alert(`Failed (${res.status}): ${t}`);
-        }
-    }
-
-    return (
-        <div className='grid grid-cols-1 gap-3'>
-            {repos.map((r) => (
-                <div key={r.id} className='border rounded p-3 flex items-center justify-between bg-white'>
-                    <div className='min-w-0'>
-                        <div className='font-medium text-gray-900 truncate'>{r.full_name}</div>
-                        <div className='text-xs text-gray-600'>
-                            {r.private ? 'private' : 'public'} · {r.default_branch}
-                        </div>
-                    </div>
-                    <div className='flex gap-2'>
-                        <button className='px-3 py-1 rounded border' onClick={() => queue('ping')} disabled={busy !== null}>
-                            Ping
-                        </button>
-                        <button className='px-3 py-1 rounded border' onClick={() => queue('scan:secrets', r)} disabled={busy !== null}>
-                            Secrets
-                        </button>
-                        <button className='px-3 py-1 rounded border' onClick={() => queue('scan:sbom', r)} disabled={busy !== null}>
-                            SBOM
-                        </button>
-                        <button className='px-3 py-1 rounded border' onClick={() => queue('scan:vulns', r)} disabled={busy !== null}>
-                            Vulns
-                        </button>
-                    </div>
-                </div>
-            ))}
-        </div>
-    );
+function normalize(r: AnyRepo): UiRepo {
+  const fullName =
+    r.fullName ??
+    r.full_name ??
+    (r.owner?.login && r.name ? r.owner.login + "/" + r.name : "");
+  const defaultBranch = r.defaultBranch ?? r.default_branch ?? "main";
+  return {
+    id: Number(r.id),
+    fullName: String(fullName || "(unknown)"),
+    private: !!r.private,
+    defaultBranch,
+  };
 }
 
+async function queueJob(type: string, repoGithubId: number) {
+  const res = await fetch("/api/jobs", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ type, repoGithubId }),
+  });
 
+  let data: any = {};
+  try { data = await res.json(); } catch {}
+
+  if (res.ok) {
+    alert("Queued " + type + ": job " + (data.id ?? ""));
+  } else {
+    alert("Failed (" + res.status + "): " + JSON.stringify(data));
+  }
+}
+
+export default function RepoList({ initialRepos }: { initialRepos: AnyRepo[] }) {
+  const [repos] = useState<UiRepo[]>(() => (initialRepos || []).map(normalize));
+
+  return (
+    <div className="space-y-6">
+      {repos.map((r) => (
+        <div
+          key={r.id}
+          className="flex items-center justify-between rounded border p-4"
+        >
+          <div className="text-lg">
+            <div className="font-medium">{r.fullName}</div>
+            <div className="text-sm text-gray-500">
+              {r.private ? "private" : "public"} · {r.defaultBranch}
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => queueJob("ping", r.id)}
+              className="px-4 py-2 rounded border"
+            >
+              Ping
+            </button>
+            <button
+              onClick={() => queueJob("scan:secrets", r.id)}
+              className="px-4 py-2 rounded border"
+            >
+              Secrets
+            </button>
+            <button
+              onClick={() => queueJob("scan:sbom", r.id)}
+              className="px-4 py-2 rounded border"
+            >
+              SBOM
+            </button>
+            <button
+              onClick={() => queueJob("scan:vulns", r.id)}
+              className="px-4 py-2 rounded border"
+            >
+              Vulns
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
