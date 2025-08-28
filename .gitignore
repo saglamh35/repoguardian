@@ -21,3 +21,5 @@ _sample-repo/
 web/.env.local
 worker/.env
 *.env.local
+
+web/.env.local
