@@ -1,9 +1,9 @@
-name: Worker Smoke
+﻿name: Worker Smoke
 on:
   pull_request:
     branches: [ main ]
   push:
-    branches: [ stage-6-worker-health ]
+    branches: [ stage-6-worker-health-1 ]
 jobs:
   worker_smoke:
     runs-on: ubuntu-latest
@@ -18,19 +18,30 @@ jobs:
           --health-retries=20
     steps:
       - uses: actions/checkout@v4
+
       - uses: pnpm/action-setup@v4
-        with: { version: 9 }
+        with:
+          version: 9
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: "pnpm"
+          cache: pnpm
+          cache-dependency-path: |
+            worker/pnpm-lock.yaml
+
+      - name: Install curl & jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
       - name: Install worker deps
         run: pnpm -C worker install
+
       - name: Start worker
         run: pnpm -C worker dev &
         env:
           REDIS_URL: redis://localhost:6379
           WORKER_PORT: 9100
+
       - name: Wait for health
         run: |
           for i in {1..30}; do
@@ -38,11 +49,13 @@ jobs:
             sleep 2
           done
           exit 1
+
       - name: Enqueue dummy job
         id: enqueue
         run: |
           JOB_ID=$(curl -fsS -X POST http://localhost:9100/enqueue/dummy -H 'content-type: application/json' -d '{}' | jq -r .jobId)
           echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
+
       - name: Wait job completion
         run: |
           for i in {1..60}; do
@@ -52,6 +65,7 @@ jobs:
             sleep 1
           done
           exit 1
+
       - name: Check metrics
         run: |
-          curl -fsS http://localhost:9100/metrics | grep -E 'jobs_total|job_duration_seconds'
+          curl -fsS http://localhost:9100/metrics | grep -E "jobs_total|job_duration_seconds"
