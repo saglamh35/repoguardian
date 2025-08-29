@@ -1,0 +1,52 @@
+﻿name: Smoke
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ stage-5-ci-smoke ]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install curl
+        run: sudo apt-get update && sudo apt-get install -y curl
+      - name: Install web deps
+        run: pnpm -C web install
+      - name: Build web
+        run: pnpm -C web build
+        env:
+          AUTH_TRUST_HOST: "true"
+          NEXTAUTH_URL: "http://localhost:3000"
+          NEXTAUTH_SECRET: "dummy_stage5"
+          REDIS_URL: "redis://localhost:6379"
+      - name: Start web
+        run: pnpm -C web start &
+        env:
+          PORT: "3000"
+          AUTH_TRUST_HOST: "true"
+          NEXTAUTH_URL: "http://localhost:3000"
+          NEXTAUTH_SECRET: "dummy_stage5"
+          REDIS_URL: "redis://localhost:6379"
+      - name: Wait for /api/health
+        run: |
+          for i in {1..60}; do
+            curl -fsS http://localhost:3000/api/health && exit 0
+            sleep 2
+          done
+          exit 1
