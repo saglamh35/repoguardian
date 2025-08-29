@@ -4,6 +4,7 @@ on:
     branches: [ main ]
   push:
     branches: [ stage-6-worker-health-1 ]
+
 jobs:
   worker_smoke:
     runs-on: ubuntu-latest
@@ -16,6 +17,7 @@ jobs:
           --health-interval=5s
           --health-timeout=5s
           --health-retries=20
+
     steps:
       - uses: actions/checkout@v4
 
@@ -23,13 +25,13 @@ jobs:
         with:
           version: 9
 
+      # ÖNEMLİ: cache kullanmıyoruz; sadece Node 20 kuruyoruz
       - uses: actions/setup-node@v4
         with:
-  node-version: 20
-            worker/pnpm-lock.yaml
+          node-version: 20
 
       - name: Install curl & jq
-        run: sudo apt-get update && sudo apt-get install -y jq
+        run: sudo apt-get update && sudo apt-get install -y curl jq
 
       - name: Install worker deps
         run: pnpm -C worker install
@@ -67,4 +69,3 @@ jobs:
       - name: Check metrics
         run: |
           curl -fsS http://localhost:9100/metrics | grep -E "jobs_total|job_duration_seconds"
-
