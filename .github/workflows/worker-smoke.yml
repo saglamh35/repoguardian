@@ -25,9 +25,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: pnpm
-          cache-dependency-path: |
+  node-version: 20
             worker/pnpm-lock.yaml
 
       - name: Install curl & jq
@@ -69,3 +67,4 @@ jobs:
       - name: Check metrics
         run: |
           curl -fsS http://localhost:9100/metrics | grep -E "jobs_total|job_duration_seconds"
+
