@@ -1,4 +1,4 @@
-﻿name: Smoke
+name: Smoke
 on:
   pull_request:
     branches: [ main ]
@@ -17,17 +17,24 @@ jobs:
           --health-interval=5s
           --health-timeout=5s
           --health-retries=20
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: pnpm/action-setup@v4
-        with: { version: 9 }
+        with:
+          version: 9
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+
       - name: Install curl
         run: sudo apt-get update && sudo apt-get install -y curl
+
       - name: Install web deps
         run: pnpm -C web install
+
       - name: Build web
         run: pnpm -C web build
         env:
@@ -35,6 +42,7 @@ jobs:
           NEXTAUTH_URL: "http://localhost:3000"
           NEXTAUTH_SECRET: "dummy_stage5"
           REDIS_URL: "redis://localhost:6379"
+
       - name: Start web
         run: pnpm -C web start &
         env:
@@ -43,6 +51,7 @@ jobs:
           NEXTAUTH_URL: "http://localhost:3000"
           NEXTAUTH_SECRET: "dummy_stage5"
           REDIS_URL: "redis://localhost:6379"
+
       - name: Wait for /api/health
         run: |
           for i in {1..60}; do
