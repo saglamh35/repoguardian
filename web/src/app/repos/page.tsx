@@ -1,6 +1,7 @@
 ﻿import { auth } from "@/lib/auth";
 import { getUserOctokit } from "@/lib/octokit";
 import RepoList from "@/components/RepoList";
+import WorkerStatusBadge from "@/components/WorkerStatusBadge";
 
 export default async function ReposPage() {
   const session = await auth();
@@ -31,7 +32,10 @@ export default async function ReposPage() {
 
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-2xl font-semibold text-gray-900 mb-6">Your Repositories</h1>
+        <div className="flex items-center gap-4 mb-6">
+          <h1 className="text-2xl font-semibold text-gray-900">Your Repositories</h1>
+          <WorkerStatusBadge />
+        </div>
         <RepoList initialRepos={repos} />
       </div>
     );
