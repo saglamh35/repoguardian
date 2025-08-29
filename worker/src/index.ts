@@ -6,7 +6,8 @@ import { collectDefaultMetrics, Counter, Histogram, Gauge, register } from "prom
 const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
 const WORKER_PORT = Number(process.env.WORKER_PORT ?? 9100);
 
-const connection = new IORedis(REDIS_URL);
+// IMPORTANT: BullMQ v5 requires maxRetriesPerRequest = null
+const connection = new IORedis(REDIS_URL, { maxRetriesPerRequest: null });
 
 // ---- Metrics
 collectDefaultMetrics({ register });
@@ -30,15 +31,15 @@ const events = new QueueEvents(queueName, { connection });
 // ---- Worker
 const worker = new Worker(queueName, async (job: Job) => {
   const start = process.hrtime.bigint();
-  if (Math.random() < 0.10) throw new Error("random-failure"); // intentionally fail ~10%
-  await new Promise(r => setTimeout(r, 300));                  // simulate work 300ms
+  if (Math.random() < 0.10) throw new Error("random-failure");
+  await new Promise(r => setTimeout(r, 300));
   const durSec = Number(process.hrtime.bigint() - start) / 1e9;
   jobDuration.labels(queueName).observe(durSec);
   return { ok: true, payload: job.data?.payload ?? null };
 }, { connection });
 
 events.on("completed", () => jobsTotal.labels(queueName,"completed").inc());
-events.on("failed", () => jobsTotal.labels(queueName,"failed").inc());
+events.on("failed",    () => jobsTotal.labels(queueName,"failed").inc());
 
 async function refreshQueueGauges() {
   const c = await dummyQueue.getJobCounts("active","waiting","failed");
