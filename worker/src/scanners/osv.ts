@@ -12,8 +12,12 @@ function sevOf(vuln: any): string | undefined {
 }
 
 export async function osvScan(targetPath: string): Promise<OsvScan> {
+  if (process.env.SCAN_NO_TOOLS === "1") {
+    return { tool: "osv", findings: [], summary: { count: 0, critical: 0, high: 0, medium: 0, low: 0 } };
+  }
+
   try {
-    const { stdout } = await run("osv-scanner", ["-r", targetPath, "-o", "-", "--format", "json"], { timeoutMs: 180_000 });
+    const { stdout } = await run("osv-scanner", ["-r", targetPath, "--format", "json", "-o", "-"], { timeoutMs: 45_000 });
     let json: any = {}; try { json = JSON.parse(stdout); } catch {}
     const findings: OsvScan["findings"] = [];
     const sevCount = { critical: 0, high: 0, medium: 0, low: 0 };

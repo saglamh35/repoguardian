@@ -45,7 +45,7 @@ async function refreshQueueGauges() {
 setInterval(refreshQueueGauges, 1000).unref();
 
 // ---- scan (stage7)
-const scanQueue = new Queue("scan", { connection, defaultJobOptions: { attempts, backoff } });
+const scanQueue = new Queue("scan", { connection, defaultJobOptions: { attempts: 1, removeOnComplete: true, removeOnFail: true } });
 const scanEvents = new QueueEvents("scan", { connection });
 const scanWorker = new Worker("scan", async (job: Job) => {
   const { repo, ref } = job.data || {};
@@ -91,7 +91,9 @@ app.post("/enqueue/scan/osv", async (req, res) => {
 });
 app.get("/job/:id", async (req, res) => {
   const id = req.params.id;
-  const job = await dummyQueue.getJob(id) || await scanQueue.getJob(id);
+  const scanJob = await scanQueue.getJob(id);
+  const dummyJob = scanJob ? null : await dummyQueue.getJob(id);
+  const job = scanJob ?? dummyJob;
   if (!job) return res.status(404).json({ error: "not found" });
   const state = await job.getState();
   const value = await job.returnvalue;
@@ -104,6 +106,20 @@ app.get("/job/:id", async (req, res) => {
     if (t === "secret" || t === "osv") scanJobsTotal.labels(t, "failed").inc();
     else jobsTotal.labels(queueName,"failed").inc();
   }
-  res.json({ status: state, result: value ?? undefined });
+  res.json({ status: state, type: ((job.name === "secret" || job.name === "osv") ? job.name : "dummy"), result: value ?? undefined });
 });
 app.listen(WORKER_PORT, () => console.log(`[worker] up on :${WORKER_PORT}`));
+
+app.get("/job/scan/:id", async (req, res) => {
+  const job = await scanQueue.getJob(req.params.id);
+  if (!job) return res.status(404).json({ error: "not found" });
+  res.json({ status: await job.getState(), type: job.name, result: await job.returnvalue });
+});
+app.get("/job/dummy/:id", async (req, res) => {
+  const job = await dummyQueue.getJob(req.params.id);
+  if (!job) return res.status(404).json({ error: "not found" });
+  res.json({ status: await job.getState(), type: "dummy", result: await job.returnvalue });
+});
+
+
+
