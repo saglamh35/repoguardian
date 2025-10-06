@@ -2,6 +2,7 @@
 on:
   pull_request:
     branches: [ main ]
+    paths: [ "worker/**", ".github/workflows/**", "gitleaks.json" ]
   push:
     branches: [ stage-6-worker-health-1 ]
 
@@ -40,32 +41,36 @@ jobs:
         run: pnpm -C worker dev &
         env:
           REDIS_URL: redis://localhost:6379
-          WORKER_PORT: 9100
+          WORKER_PORT: 4000
 
       - name: Wait for health
         run: |
           for i in {1..30}; do
-            curl -fsS http://localhost:9100/health && exit 0
+            curl -fsS http://localhost:4000/health && exit 0
             sleep 2
           done
           exit 1
 
-      - name: Enqueue dummy job
+      - name: Enqueue secret & osv
         id: enqueue
         run: |
-          JOB_ID=$(curl -fsS -X POST http://localhost:9100/enqueue/dummy -H 'content-type: application/json' -d '{}' | jq -r .jobId)
-          echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
+          SECRET=$(curl -fsS -X POST http://localhost:4000/enqueue/scan/secret -H 'content-type: application/json' -d '{"repoPath":"."}' | jq -r .id)
+          OSV=$(curl -fsS -X POST http://localhost:4000/enqueue/scan/osv -H 'content-type: application/json' -d '{"packages":[{"package":{"ecosystem":"npm","name":"next"},"version":"14.2.10"}]}' | jq -r .id)
+          echo "secret_id=$SECRET" >> $GITHUB_OUTPUT
+          echo "osv_id=$OSV" >> $GITHUB_OUTPUT
 
-      - name: Wait job completion
+      - name: Wait jobs completion
         run: |
-          for i in {1..60}; do
-            STATUS=$(curl -fsS http://localhost:9100/job/${{ steps.enqueue.outputs.job_id }} | jq -r .status)
-            echo "status=$STATUS"
-            [ "$STATUS" = "completed" ] && exit 0
-            sleep 1
+          for ID in "${{ steps.enqueue.outputs.secret_id }}" "${{ steps.enqueue.outputs.osv_id }}"; do
+            echo "waiting $ID"
+            for i in {1..60}; do
+              STATE=$(curl -fsS http://localhost:4000/job/$ID | jq -r .state)
+              echo "state=$STATE"
+              [ "$STATE" = "completed" ] && break
+              sleep 1
+            done
           done
-          exit 1
 
       - name: Check metrics
         run: |
-          curl -fsS http://localhost:9100/metrics | grep -E "jobs_total|job_duration_seconds"
+          curl -fsS http://localhost:4000/metrics | grep -E "repoguardian_scan_total|repoguardian_scan_duration_seconds|repoguardian_queue_depth"

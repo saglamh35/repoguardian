@@ -59,3 +59,7 @@ jobs:
             sleep 2
           done
           exit 1
+
+      - name: (optional) Worker reachable?
+        continue-on-error: true
+        run: curl -sSf http://localhost:4000/health || echo "::notice::worker not running in this job"
